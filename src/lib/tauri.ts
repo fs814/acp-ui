@@ -19,6 +19,10 @@ export async function spawnAgent(name: string): Promise<AgentInstance> {
   return invoke<AgentInstance>('spawn_agent', { name });
 }
 
+export async function connectRemoteAgent(name: string): Promise<AgentInstance> {
+  return invoke<AgentInstance>('connect_remote_agent', { name });
+}
+
 export async function sendToAgent(agentId: string, message: string): Promise<void> {
   return invoke<void>('send_to_agent', { agentId, message });
 }
@@ -35,9 +39,12 @@ export async function addAgent(
   name: string,
   command: string,
   args: string[],
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  connectionType?: string,
+  host?: string,
+  port?: number,
 ): Promise<AgentsConfig> {
-  return invoke<AgentsConfig>('add_agent', { name, command, args, env });
+  return invoke<AgentsConfig>('add_agent', { name, command, args, env, connectionType, host, port });
 }
 
 export async function removeAgent(name: string): Promise<AgentsConfig> {
@@ -48,9 +55,12 @@ export async function updateAgent(
   name: string,
   command: string,
   args: string[],
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  connectionType?: string,
+  host?: string,
+  port?: number,
 ): Promise<AgentsConfig> {
-  return invoke<AgentsConfig>('update_agent', { name, command, args, env });
+  return invoke<AgentsConfig>('update_agent', { name, command, args, env, connectionType, host, port });
 }
 
 // Event listeners

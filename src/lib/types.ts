@@ -4,6 +4,9 @@ export interface AgentConfig {
   command: string;
   args: string[];
   env?: Record<string, string>;
+  connection_type?: 'local' | 'remote';
+  host?: string;
+  port?: number;
 }
 
 export interface AgentsConfig {

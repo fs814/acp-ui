@@ -6,7 +6,8 @@ import { getVersion } from '@tauri-apps/api/app';
 import { trackEvent, trackError } from '../lib/telemetry';
 import type { SavedSession, ChatMessage, ToolCallInfo, PermissionRequest, SessionMode, SlashCommand, ModelInfo } from '../lib/types';
 import { AcpClientBridge, createAcpClient } from '../lib/acp-bridge';
-import { spawnAgent, killAgent, onAgentStderr } from '../lib/tauri';
+import { spawnAgent, connectRemoteAgent, killAgent, onAgentStderr } from '../lib/tauri';
+import { useConfigStore } from './config';
 import type { SessionNotification, AuthMethod } from '@agentclientprotocol/sdk';
 
 const STORE_PATH = 'sessions.json';
@@ -277,8 +278,12 @@ export const useSessionStore = defineStore('session', () => {
     }, 1000);
     
     try {
-      // Spawn agent process
-      const agentInstance = await spawnAgent(agentName);
+      // Spawn or connect agent based on connection type
+      const configStore = useConfigStore();
+      const agentConfig = configStore.config.agents[agentName];
+      const agentInstance = agentConfig?.connection_type === 'remote'
+        ? await connectRemoteAgent(agentName)
+        : await spawnAgent(agentName);
       
       // Listen for stderr to track startup progress
       stderrUnlisten = await onAgentStderr((stderr) => {
@@ -474,8 +479,12 @@ export const useSessionStore = defineStore('session', () => {
     error.value = null;
 
     try {
-      // Spawn agent process
-      const agentInstance = await spawnAgent(savedSession.agentName);
+      // Spawn or connect agent based on connection type
+      const configStore = useConfigStore();
+      const agentConfig = configStore.config.agents[savedSession.agentName];
+      const agentInstance = agentConfig?.connection_type === 'remote'
+        ? await connectRemoteAgent(savedSession.agentName)
+        : await spawnAgent(savedSession.agentName);
       
       // Create ACP client bridge
       acpClient = await createAcpClient(agentInstance);

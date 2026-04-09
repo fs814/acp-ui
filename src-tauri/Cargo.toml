@@ -33,4 +33,6 @@ parking_lot = "0.12"
 machine-uid = "0.5"
 indexmap = { version = "2", features = ["serde"] }
 shell-escape = "0.1"
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
 

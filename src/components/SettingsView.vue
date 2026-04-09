@@ -16,6 +16,9 @@ const agents = computed(() => {
     command: config.command,
     args: config.args.join(' '),
     env: config.env || {},
+    connection_type: config.connection_type || 'local',
+    host: config.host || '',
+    port: config.port || undefined,
   }));
 });
 
@@ -23,17 +26,23 @@ const agents = computed(() => {
 const showAddForm = ref(false);
 const editingAgent = ref<string | null>(null);
 const formName = ref('');
+const formConnectionType = ref<'local' | 'remote'>('local');
 const formCommand = ref('');
 const formArgs = ref('');
 const formEnv = ref<Record<string, string>>({});
+const formHost = ref('');
+const formPort = ref<number | undefined>(undefined);
 const formError = ref('');
 const isSubmitting = ref(false);
 
 function resetForm() {
   formName.value = '';
+  formConnectionType.value = 'local';
   formCommand.value = '';
   formArgs.value = '';
   formEnv.value = {};
+  formHost.value = '';
+  formPort.value = undefined;
   formError.value = '';
   showAddForm.value = false;
   editingAgent.value = null;
@@ -44,13 +53,16 @@ function startAdd() {
   showAddForm.value = true;
 }
 
-function startEdit(agent: { name: string; command: string; args: string; env: Record<string, string> }) {
+function startEdit(agent: { name: string; command: string; args: string; env: Record<string, string>; connection_type: string; host: string; port?: number }) {
   resetForm();
   editingAgent.value = agent.name;
   formName.value = agent.name;
+  formConnectionType.value = (agent.connection_type === 'remote') ? 'remote' : 'local';
   formCommand.value = agent.command;
   formArgs.value = agent.args;
   formEnv.value = { ...agent.env };
+  formHost.value = agent.host;
+  formPort.value = agent.port;
 }
 
 function parseArgs(argsString: string): string[] {
@@ -84,13 +96,9 @@ function parseArgs(argsString: string): string[] {
 
 async function handleSubmit() {
   formError.value = '';
-  
+
   if (!formName.value.trim()) {
     formError.value = 'Name is required';
-    return;
-  }
-  if (!formCommand.value.trim()) {
-    formError.value = 'Command is required';
     return;
   }
 
@@ -100,12 +108,35 @@ async function handleSubmit() {
     return;
   }
 
+  if (formConnectionType.value === 'remote') {
+    if (!formHost.value.trim()) {
+      formError.value = 'Host is required for remote agents';
+      return;
+    }
+    if (!formPort.value || formPort.value < 1 || formPort.value > 65535) {
+      formError.value = 'A valid port (1-65535) is required for remote agents';
+      return;
+    }
+  } else {
+    if (!formCommand.value.trim()) {
+      formError.value = 'Command is required';
+      return;
+    }
+  }
+
   const args = parseArgs(formArgs.value);
   isSubmitting.value = true;
 
   try {
+    const connectionType = formConnectionType.value;
+    const host = connectionType === 'remote' ? formHost.value : undefined;
+    const port = connectionType === 'remote' ? formPort.value : undefined;
+
     if (editingAgent.value) {
-      const newConfig = await updateAgent(formName.value, formCommand.value, args, formEnv.value);
+      const newConfig = await updateAgent(
+        formName.value, formCommand.value, args, formEnv.value,
+        connectionType, host, port,
+      );
       configStore.updateFromEvent(newConfig);
     } else {
       // Check for duplicates
@@ -114,7 +145,10 @@ async function handleSubmit() {
         isSubmitting.value = false;
         return;
       }
-      const newConfig = await addAgent(formName.value, formCommand.value, args, formEnv.value);
+      const newConfig = await addAgent(
+        formName.value, formCommand.value, args, formEnv.value,
+        connectionType, host, port,
+      );
       configStore.updateFromEvent(newConfig);
     }
     resetForm();
@@ -127,7 +161,7 @@ async function handleSubmit() {
 
 async function handleDelete(name: string) {
   if (!confirm(`Delete agent "${name}"?`)) return;
-  
+
   try {
     const newConfig = await removeAgent(name);
     configStore.updateFromEvent(newConfig);
@@ -157,47 +191,91 @@ async function handleDelete(name: string) {
           <!-- Add/Edit Form -->
           <div v-if="showAddForm || editingAgent" class="agent-form">
             <h4>{{ editingAgent ? 'Edit Agent' : 'Add New Agent' }}</h4>
-            
+
             <div class="form-group">
               <label>Name</label>
-              <input 
-                v-model="formName" 
-                type="text" 
+              <input
+                v-model="formName"
+                type="text"
                 placeholder="My Agent"
                 :disabled="!!editingAgent"
               />
             </div>
 
             <div class="form-group">
-              <label>Command</label>
-              <input 
-                v-model="formCommand" 
-                type="text" 
-                placeholder="npx"
-              />
+              <label>Connection Type</label>
+              <div class="connection-toggle">
+                <button
+                  :class="['toggle-btn', { active: formConnectionType === 'local' }]"
+                  @click="formConnectionType = 'local'"
+                >
+                  Local
+                </button>
+                <button
+                  :class="['toggle-btn', { active: formConnectionType === 'remote' }]"
+                  @click="formConnectionType = 'remote'"
+                >
+                  Remote
+                </button>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label>Arguments</label>
-              <input 
-                v-model="formArgs" 
-                type="text" 
-                placeholder="-y @example/agent"
-              />
-              <small>Space-separated. Use quotes for args with spaces.</small>
-            </div>
+            <!-- Local agent fields -->
+            <template v-if="formConnectionType === 'local'">
+              <div class="form-group">
+                <label>Command</label>
+                <input
+                  v-model="formCommand"
+                  type="text"
+                  placeholder="npx"
+                />
+              </div>
 
-            <div class="form-group">
-              <EnvVarEditor v-model="formEnv" />
-            </div>
+              <div class="form-group">
+                <label>Arguments</label>
+                <input
+                  v-model="formArgs"
+                  type="text"
+                  placeholder="-y @example/agent"
+                />
+                <small>Space-separated. Use quotes for args with spaces.</small>
+              </div>
+
+              <div class="form-group">
+                <EnvVarEditor v-model="formEnv" />
+              </div>
+            </template>
+
+            <!-- Remote agent fields -->
+            <template v-else>
+              <div class="form-group">
+                <label>Host</label>
+                <input
+                  v-model="formHost"
+                  type="text"
+                  placeholder="192.168.1.100"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Port</label>
+                <input
+                  v-model.number="formPort"
+                  type="number"
+                  placeholder="9800"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+            </template>
 
             <div v-if="formError" class="form-error">
               {{ formError }}
             </div>
 
             <div class="form-actions">
-              <button 
-                class="save-btn" 
+              <button
+                class="save-btn"
                 @click="handleSubmit"
                 :disabled="isSubmitting"
               >
@@ -211,15 +289,19 @@ async function handleDelete(name: string) {
 
           <!-- Agent List -->
           <div class="agents-list">
-            <div 
-              v-for="agent in agents" 
+            <div
+              v-for="agent in agents"
               :key="agent.name"
               class="agent-item"
             >
               <div class="agent-info">
-                <div class="agent-name">{{ agent.name }}</div>
+                <div class="agent-name">
+                  <span v-if="agent.connection_type === 'remote'" class="remote-badge" title="Remote agent">&#x1F310;</span>
+                  {{ agent.name }}
+                </div>
                 <div class="agent-command">
-                  <code>{{ agent.command }} {{ agent.args }}</code>
+                  <code v-if="agent.connection_type === 'remote'">{{ agent.host }}:{{ agent.port }}</code>
+                  <code v-else>{{ agent.command }} {{ agent.args }}</code>
                 </div>
               </div>
               <div class="agent-actions">
@@ -377,6 +459,34 @@ async function handleDelete(name: string) {
   color: var(--text-muted);
 }
 
+.connection-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.toggle-btn {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn.active {
+  background: var(--bg-primary);
+  color: white;
+}
+
+.toggle-btn:not(.active):hover {
+  background: var(--bg-hover);
+}
+
 .form-error {
   color: var(--bg-danger);
   font-size: 0.875rem;
@@ -442,6 +552,11 @@ async function handleDelete(name: string) {
 .agent-name {
   font-weight: 500;
   margin-bottom: 0.25rem;
+}
+
+.remote-badge {
+  margin-right: 0.25rem;
+  font-size: 0.875rem;
 }
 
 .agent-command {

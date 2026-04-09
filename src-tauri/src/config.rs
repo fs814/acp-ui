@@ -7,12 +7,24 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionType {
+    #[default]
+    Local,
+    Remote,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub command: String,
     pub args: Vec<String>,
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub connection_type: ConnectionType,
+    pub host: Option<String>,
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +44,9 @@ impl Default for AgentsConfig {
                     "--acp".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -42,6 +57,9 @@ impl Default for AgentsConfig {
                     "@zed-industries/claude-code-acp@latest".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -53,6 +71,9 @@ impl Default for AgentsConfig {
                     "--experimental-acp".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -65,6 +86,9 @@ impl Default for AgentsConfig {
                     "--experimental-skills".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -80,6 +104,9 @@ impl Default for AgentsConfig {
                     env.insert("AUGMENT_DISABLE_AUTO_UPDATE".to_string(), "1".to_string());
                     env
                 },
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -91,6 +118,9 @@ impl Default for AgentsConfig {
                     "--acp".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -101,6 +131,9 @@ impl Default for AgentsConfig {
                     "@zed-industries/codex-acp@latest".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -112,6 +145,9 @@ impl Default for AgentsConfig {
                     "acp".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         agents.insert(
@@ -123,6 +159,9 @@ impl Default for AgentsConfig {
                     "acp".to_string(),
                 ],
                 env: std::collections::HashMap::new(),
+                connection_type: ConnectionType::default(),
+                host: None,
+                port: None,
             },
         );
         AgentsConfig { agents }

@@ -1,8 +1,9 @@
 mod agent;
 mod config;
+mod ws_transport;
 
 use agent::{AgentInstance, AgentManager};
-use config::{AgentConfig, AgentsConfig, ConfigManager};
+use config::{AgentConfig, AgentsConfig, ConfigManager, ConnectionType};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
@@ -62,6 +63,40 @@ fn spawn_agent(
 }
 
 #[tauri::command]
+async fn connect_remote_agent(
+    name: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<AgentInstance, String> {
+    let (host, port) = {
+        let config_manager = state.config_manager.read();
+        let config = config_manager
+            .as_ref()
+            .ok_or_else(|| "Config manager not initialized".to_string())?
+            .get_config();
+
+        let agent_config = config
+            .agents
+            .get(&name)
+            .ok_or_else(|| format!("Agent '{}' not found in config", name))?;
+
+        let host = agent_config
+            .host
+            .clone()
+            .ok_or_else(|| "Remote agent requires a host".to_string())?;
+        let port = agent_config
+            .port
+            .ok_or_else(|| "Remote agent requires a port".to_string())?;
+        (host, port)
+    };
+
+    state
+        .agent_manager
+        .connect_remote_agent(name, &host, port, app_handle)
+        .await
+}
+
+#[tauri::command]
 fn send_to_agent(agent_id: String, message: String, state: State<AppState>) -> Result<(), String> {
     state.agent_manager.send_message(&agent_id, &message)
 }
@@ -82,13 +117,30 @@ fn add_agent(
     command: String,
     args: Vec<String>,
     env: std::collections::HashMap<String, String>,
+    connection_type: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
+    let ct = match connection_type.as_deref() {
+        Some("remote") => ConnectionType::Remote,
+        _ => ConnectionType::Local,
+    };
     let config_manager = state.config_manager.read();
     config_manager
         .as_ref()
         .ok_or_else(|| "Config manager not initialized".to_string())?
-        .add_agent(name, AgentConfig { command, args, env })
+        .add_agent(
+            name,
+            AgentConfig {
+                command,
+                args,
+                env,
+                connection_type: ct,
+                host,
+                port,
+            },
+        )
 }
 
 #[tauri::command]
@@ -106,13 +158,30 @@ fn update_agent(
     command: String,
     args: Vec<String>,
     env: std::collections::HashMap<String, String>,
+    connection_type: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
+    let ct = match connection_type.as_deref() {
+        Some("remote") => ConnectionType::Remote,
+        _ => ConnectionType::Local,
+    };
     let config_manager = state.config_manager.read();
     config_manager
         .as_ref()
         .ok_or_else(|| "Config manager not initialized".to_string())?
-        .update_agent(name, AgentConfig { command, args, env })
+        .update_agent(
+            name,
+            AgentConfig {
+                command,
+                args,
+                env,
+                connection_type: ct,
+                host,
+                port,
+            },
+        )
 }
 
 #[tauri::command]
@@ -154,6 +223,7 @@ pub fn run() {
             reload_config,
             get_config_path,
             spawn_agent,
+            connect_remote_agent,
             send_to_agent,
             kill_agent,
             list_running_agents,

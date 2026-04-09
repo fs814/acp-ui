@@ -15,6 +15,7 @@ use std::os::windows::process::CommandExt;
 use shell_escape;
 
 use crate::config::AgentConfig;
+use crate::ws_transport::WsConnection;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInstance {
@@ -34,14 +35,19 @@ pub struct AgentStderr {
     pub line: String,
 }
 
-struct RunningAgent {
-    #[allow(dead_code)]
-    child: Child,
-    stdin: Arc<RwLock<std::process::ChildStdin>>,
+enum AgentConnection {
+    Local {
+        #[allow(dead_code)]
+        child: Child,
+        stdin: Arc<RwLock<std::process::ChildStdin>>,
+    },
+    Remote {
+        ws: WsConnection,
+    },
 }
 
 pub struct AgentManager {
-    agents: Arc<RwLock<HashMap<String, RunningAgent>>>,
+    agents: Arc<RwLock<HashMap<String, AgentConnection>>>,
 }
 
 impl AgentManager {
@@ -189,8 +195,29 @@ impl AgentManager {
             }
         });
 
-        let running_agent = RunningAgent { child, stdin };
-        self.agents.write().insert(agent_id.clone(), running_agent);
+        let connection = AgentConnection::Local { child, stdin };
+        self.agents.write().insert(agent_id.clone(), connection);
+
+        Ok(AgentInstance {
+            id: agent_id,
+            name,
+        })
+    }
+
+    pub async fn connect_remote_agent(
+        &self,
+        name: String,
+        host: &str,
+        port: u16,
+        app_handle: AppHandle,
+    ) -> Result<AgentInstance, String> {
+        let agent_id = Uuid::new_v4().to_string();
+        let url = format!("ws://{}:{}", host, port);
+
+        let ws = WsConnection::connect(&url, agent_id.clone(), app_handle).await?;
+
+        let connection = AgentConnection::Remote { ws };
+        self.agents.write().insert(agent_id.clone(), connection);
 
         Ok(AgentInstance {
             id: agent_id,
@@ -204,22 +231,36 @@ impl AgentManager {
             .get(agent_id)
             .ok_or_else(|| format!("Agent not found: {}", agent_id))?;
 
-        let mut stdin = agent.stdin.write();
-        writeln!(stdin, "{}", message).map_err(|e| format!("Failed to write to stdin: {}", e))?;
-        stdin
-            .flush()
-            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+        match agent {
+            AgentConnection::Local { stdin, .. } => {
+                let mut stdin = stdin.write();
+                writeln!(stdin, "{}", message)
+                    .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+                stdin
+                    .flush()
+                    .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+            }
+            AgentConnection::Remote { ws } => {
+                ws.send(message)?;
+            }
+        }
 
         Ok(())
     }
 
     pub fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
         let mut agents = self.agents.write();
-        if let Some(mut agent) = agents.remove(agent_id) {
-            agent
-                .child
-                .kill()
-                .map_err(|e| format!("Failed to kill agent: {}", e))?;
+        if let Some(agent) = agents.remove(agent_id) {
+            match agent {
+                AgentConnection::Local { mut child, .. } => {
+                    child
+                        .kill()
+                        .map_err(|e| format!("Failed to kill agent: {}", e))?;
+                }
+                AgentConnection::Remote { ws } => {
+                    ws.close();
+                }
+            }
         }
         Ok(())
     }
