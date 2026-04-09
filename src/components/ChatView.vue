@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import { marked } from 'marked';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSessionStore } from '../stores/session';
 import ModePicker from './ModePicker.vue';
 import ModelPicker from './ModelPicker.vue';
@@ -14,6 +15,71 @@ const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null);
 
 // Track expanded thought sections by message id
 const expandedThoughts = ref<Set<string>>(new Set());
+
+// Context menu state
+const contextMenu = ref<{ visible: boolean; x: number; y: number; href: string }>({
+  visible: false, x: 0, y: 0, href: '',
+});
+
+function isExternalLink(href: string): boolean {
+  return href.startsWith('http://') || href.startsWith('https://');
+}
+
+// Left-click: open in external browser
+function handleLinkClick(event: MouseEvent) {
+  const target = (event.target as HTMLElement).closest('a');
+  if (!target) return;
+  const href = target.getAttribute('href');
+  if (href && isExternalLink(href)) {
+    event.preventDefault();
+    openUrl(href);
+  }
+}
+
+// Right-click on links: show custom context menu
+function handleContextMenu(event: MouseEvent) {
+  const target = (event.target as HTMLElement).closest('a');
+  if (!target) return;
+  const href = target.getAttribute('href');
+  if (href && isExternalLink(href)) {
+    event.preventDefault();
+    contextMenu.value = { visible: true, x: event.clientX, y: event.clientY, href };
+  }
+}
+
+function dismissContextMenu() {
+  contextMenu.value.visible = false;
+}
+
+function ctxOpenExternal() {
+  openUrl(contextMenu.value.href);
+  dismissContextMenu();
+}
+
+function ctxOpenInApp() {
+  const href = contextMenu.value.href;
+  dismissContextMenu();
+  sessionStore.openWebviewTab(href);
+}
+
+// Dismiss context menu on any outside click
+function handleGlobalClick() {
+  if (contextMenu.value.visible) {
+    dismissContextMenu();
+  }
+}
+
+onMounted(() => {
+  messagesContainer.value?.addEventListener('click', handleLinkClick);
+  messagesContainer.value?.addEventListener('contextmenu', handleContextMenu);
+  document.addEventListener('click', handleGlobalClick);
+});
+
+onUnmounted(() => {
+  messagesContainer.value?.removeEventListener('click', handleLinkClick);
+  messagesContainer.value?.removeEventListener('contextmenu', handleContextMenu);
+  document.removeEventListener('click', handleGlobalClick);
+});
 
 const messages = computed(() => sessionStore.messageList);
 const isLoading = computed(() => sessionStore.isLoading);
@@ -251,6 +317,18 @@ function getStatusIcon(status: string): string {
         Send
       </button>
     </div>
+
+    <!-- Link context menu -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="link-context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      >
+        <div class="ctx-item" @click="ctxOpenExternal">Open in Browser</div>
+        <div class="ctx-item" @click="ctxOpenInApp">Open in App</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -420,6 +498,16 @@ function getStatusIcon(status: string): string {
   font-size: 0.9rem;
 }
 
+.message-content :deep(a) {
+  color: var(--text-accent, #0066cc);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.message-content :deep(a:hover) {
+  opacity: 0.8;
+}
+
 .loading-indicator {
   display: flex;
   align-items: center;
@@ -560,5 +648,28 @@ textarea:focus {
   padding: 0.125rem 0.25rem;
   border-radius: 3px;
   font-size: 0.85em;
+}
+
+/* Link context menu */
+.link-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 160px;
+  background: var(--bg-main, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+}
+
+.ctx-item {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-primary, #333);
+}
+
+.ctx-item:hover {
+  background: var(--bg-hover, #f0f0f0);
 }
 </style>

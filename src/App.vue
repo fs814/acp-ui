@@ -13,6 +13,7 @@ import SettingsView from './components/SettingsView.vue';
 import AuthMethodDialog from './components/AuthMethodDialog.vue';
 import TrafficMonitor from './components/TrafficMonitor.vue';
 import StartupProgress from './components/StartupProgress.vue';
+import TabBar from './components/TabBar.vue';
 import type { SavedSession } from './lib/types';
 
 const configStore = useConfigStore();
@@ -104,7 +105,7 @@ async function handleDeleteSession(sessionId: string) {
 }
 
 async function handleDisconnect() {
-  await sessionStore.disconnect();
+  await sessionStore.closeTab();
 }
 
 async function handleCancelConnection() {
@@ -170,19 +171,19 @@ function clearError() {
               <span class="cwd-path" :title="selectedCwd || 'Current directory'">
                 {{ selectedCwd ? selectedCwd.split(/[\\/]/).pop() : '.' }}
               </span>
-              <button 
-                class="cwd-btn" 
+              <button
+                class="cwd-btn"
                 @click="handleSelectFolder"
                 title="Select folder"
-                :disabled="isConnecting || isConnected"
+                :disabled="isConnecting"
               >
                 📁
               </button>
             </div>
           </div>
           
-          <button 
-            v-if="hasAgents && !isConnected && !isConnecting"
+          <button
+            v-if="hasAgents && !isConnecting"
             class="new-session-btn"
             :disabled="!selectedAgent || isLoading"
             @click="handleNewSession"
@@ -232,6 +233,9 @@ function clearError() {
     
     <!-- Main Content Area -->
     <div class="main-area">
+      <!-- Tab Bar -->
+      <TabBar />
+
       <main class="main-content">
         <!-- Error display -->
         <div v-if="error" class="error-banner">
@@ -242,9 +246,9 @@ function clearError() {
         
         <!-- Chat View when connected -->
         <ChatView v-if="isConnected" />
-        
-        <!-- Welcome screen when not connected -->
-        <div v-else class="welcome-screen">
+
+        <!-- Welcome screen when no tabs exist -->
+        <div v-else-if="sessionStore.tabList.length === 0" class="welcome-screen">
           <h2>Welcome to ACP UI</h2>
           <p>Select an agent and create a new session to get started.</p>
           <p v-if="!hasAgents" class="hint">
