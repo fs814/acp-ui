@@ -18,15 +18,33 @@ interface DirEntry {
 }
 
 const currentPath = ref('');
+const pathInput = ref('');
 const entries = ref<DirEntry[]>([]);
 const loading = ref(false);
 const errorMsg = ref<string | null>(null);
+const isEditingPath = ref(false);
+
+const isWindowsPath = computed(() => /^[A-Za-z]:[\\\/]/.test(currentPath.value));
 
 const parentPath = computed(() => {
-  if (!currentPath.value || currentPath.value === '/') return null;
-  const parts = currentPath.value.replace(/\/+$/, '').split('/');
-  parts.pop();
-  return parts.length === 1 ? '/' : parts.join('/');
+  const p = currentPath.value;
+  if (!p) return null;
+
+  if (isWindowsPath.value) {
+    // Windows: C:\ is root, can't go higher
+    const normalized = p.replace(/[\\/]+$/, '');
+    if (/^[A-Za-z]:$/.test(normalized)) return null;
+    const lastSep = Math.max(normalized.lastIndexOf('\\'), normalized.lastIndexOf('/'));
+    if (lastSep <= 2) return normalized.slice(0, 3); // e.g. "C:\"
+    return normalized.slice(0, lastSep);
+  }
+
+  // Unix: / is root
+  if (p === '/') return null;
+  const trimmed = p.replace(/\/+$/, '');
+  const lastSlash = trimmed.lastIndexOf('/');
+  if (lastSlash === 0) return '/';
+  return trimmed.slice(0, lastSlash);
 });
 
 async function fetchEntries(dirPath?: string) {
@@ -44,6 +62,7 @@ async function fetchEntries(dirPath?: string) {
       return;
     }
     currentPath.value = data.path;
+    pathInput.value = data.path;
     entries.value = data.entries;
   } catch (err) {
     errorMsg.value = err instanceof Error ? err.message : String(err);
@@ -53,16 +72,33 @@ async function fetchEntries(dirPath?: string) {
 }
 
 function navigateTo(dirName: string) {
-  const target = currentPath.value.endsWith('/')
-    ? currentPath.value + dirName
-    : currentPath.value + '/' + dirName;
-  fetchEntries(target);
+  const sep = isWindowsPath.value ? '\\' : '/';
+  const base = currentPath.value.replace(/[\\/]+$/, '');
+  fetchEntries(base + sep + dirName);
 }
 
 function navigateUp() {
   if (parentPath.value !== null) {
     fetchEntries(parentPath.value);
   }
+}
+
+function startEditPath() {
+  pathInput.value = currentPath.value;
+  isEditingPath.value = true;
+}
+
+function submitPathInput() {
+  const trimmed = pathInput.value.trim();
+  if (trimmed) {
+    isEditingPath.value = false;
+    fetchEntries(trimmed);
+  }
+}
+
+function cancelEditPath() {
+  isEditingPath.value = false;
+  pathInput.value = currentPath.value;
 }
 
 function handleSelect() {
@@ -85,8 +121,26 @@ onMounted(() => {
         <h3>Select Remote Directory</h3>
       </div>
 
-      <div class="current-path" :title="currentPath">
-        {{ currentPath || '...' }}
+      <div class="path-bar">
+        <input
+          v-if="isEditingPath"
+          v-model="pathInput"
+          class="path-input"
+          @keydown.enter="submitPathInput"
+          @keydown.escape="cancelEditPath"
+          @blur="cancelEditPath"
+          ref="pathInputEl"
+          autofocus
+          spellcheck="false"
+        />
+        <div
+          v-else
+          class="current-path"
+          :title="currentPath + ' (click to edit)'"
+          @click="startEditPath"
+        >
+          {{ currentPath || '...' }}
+        </div>
       </div>
 
       <div class="dialog-content">
@@ -174,16 +228,38 @@ onMounted(() => {
   font-size: 1.1rem;
 }
 
+.path-bar {
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background: var(--bg-hover, #f0f0f0);
+}
+
 .current-path {
   padding: 0.5rem 1rem;
   font-family: monospace;
   font-size: 0.8rem;
   color: var(--text-secondary, #666);
-  background: var(--bg-hover, #f0f0f0);
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
+}
+
+.current-path:hover {
+  background: var(--bg-main, #fff);
+}
+
+.path-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-primary, #333);
+  background: var(--bg-main, #fff);
+  border: none;
+  border-bottom: 2px solid var(--bg-primary, #0066cc);
+  outline: none;
+  box-sizing: border-box;
 }
 
 .dialog-content {
