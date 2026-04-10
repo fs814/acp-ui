@@ -15,6 +15,7 @@ import AuthMethodDialog from './components/AuthMethodDialog.vue';
 import TrafficMonitor from './components/TrafficMonitor.vue';
 import StartupProgress from './components/StartupProgress.vue';
 import TabBar from './components/TabBar.vue';
+import RemoteFolderPicker from './components/RemoteFolderPicker.vue';
 import type { SavedSession } from './lib/types';
 
 const configStore = useConfigStore();
@@ -27,6 +28,7 @@ const showSettings = ref(false);
 const showTrafficMonitor = ref(false);
 const showStartupDetails = ref(false);
 const connectionError = ref<string | null>(null);
+const showRemotePicker = ref(false);
 
 // Preferences store for persisting user selections
 let prefsStore: Awaited<ReturnType<typeof load>> | null = null;
@@ -84,7 +86,19 @@ async function handleAgentSelect(agentName: string) {
   }
 }
 
+function getSelectedAgentConfig() {
+  if (!selectedAgent.value) return null;
+  return configStore.config.agents[selectedAgent.value] ?? null;
+}
+
 async function handleSelectFolder() {
+  const agentConfig = getSelectedAgentConfig();
+
+  if (agentConfig?.connection_type === 'remote' && agentConfig.host && agentConfig.port) {
+    showRemotePicker.value = true;
+    return;
+  }
+
   const folder = await open({
     directory: true,
     multiple: false,
@@ -92,11 +106,22 @@ async function handleSelectFolder() {
   });
   if (folder) {
     selectedCwd.value = folder as string;
-    // Persist the selection
     if (prefsStore) {
       await prefsStore.set('lastCwd', folder);
     }
   }
+}
+
+async function handleRemoteSelect(remotePath: string) {
+  showRemotePicker.value = false;
+  selectedCwd.value = remotePath;
+  if (prefsStore) {
+    await prefsStore.set('lastCwd', remotePath);
+  }
+}
+
+function handleRemoteCancel() {
+  showRemotePicker.value = false;
 }
 
 async function handleNewSession() {
@@ -315,9 +340,19 @@ function clearError() {
     />
 
     <!-- Settings -->
-    <SettingsView 
+    <SettingsView
       v-if="showSettings"
       @close="showSettings = false"
+    />
+
+    <!-- Remote Folder Picker -->
+    <RemoteFolderPicker
+      v-if="showRemotePicker && getSelectedAgentConfig()?.host && getSelectedAgentConfig()?.port"
+      :host="getSelectedAgentConfig()!.host!"
+      :port="getSelectedAgentConfig()!.port!"
+      :initial-path="selectedCwd || undefined"
+      @select="handleRemoteSelect"
+      @cancel="handleRemoteCancel"
     />
   </div>
 </template>

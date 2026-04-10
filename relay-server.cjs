@@ -1,15 +1,67 @@
+const http = require('http');
 const { WebSocketServer } = require('ws');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const PORT = parseInt(process.env.RELAY_PORT || '9800', 10);
 const AGENT_CMD = process.env.RELAY_AGENT_CMD || 'npx';
 const AGENT_ARGS = (process.env.RELAY_AGENT_ARGS || '@zed-industries/claude-code-acp@latest').split(' ');
 
-const wss = new WebSocketServer({ port: PORT });
-console.log(`Relay listening on ws://0.0.0.0:${PORT}`);
-console.log(`Agent command: ${AGENT_CMD} ${AGENT_ARGS.join(' ')}`);
-
 const CWD_PREFIX = '__cwd__:';
+
+// HTTP server handles both REST API and WebSocket upgrade
+const server = http.createServer(async (req, res) => {
+  // CORS headers for dev mode
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === 'GET' && url.pathname === '/api/ls') {
+    const targetPath = url.searchParams.get('path') || os.homedir();
+
+    try {
+      const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+      const dirs = entries
+        .filter((e) => e.isDirectory())
+        .map((e) => ({ name: e.name, isDir: true }))
+        .sort((a, b) => {
+          const aHidden = a.name.startsWith('.');
+          const bHidden = b.name.startsWith('.');
+          if (aHidden !== bHidden) return aHidden ? 1 : -1;
+          return a.name.localeCompare(b.name);
+        });
+
+      const resolved = path.resolve(targetPath);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ path: resolved, entries: dirs }));
+    } catch (err) {
+      const status = err.code === 'ENOENT' ? 404 : err.code === 'EACCES' ? 403 : 500;
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not found' }));
+});
+
+const wss = new WebSocketServer({ server });
+
+server.listen(PORT, () => {
+  console.log(`Relay listening on http://0.0.0.0:${PORT} (HTTP + WebSocket)`);
+  console.log(`Agent command: ${AGENT_CMD} ${AGENT_ARGS.join(' ')}`);
+});
 
 wss.on('connection', (ws) => {
   console.log('Client connected, waiting for initialization...');
