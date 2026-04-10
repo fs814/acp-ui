@@ -25,6 +25,7 @@ const showSidebar = ref(true);
 const showSettings = ref(false);
 const showTrafficMonitor = ref(false);
 const showStartupDetails = ref(false);
+const connectionError = ref<string | null>(null);
 
 // Preferences store for persisting user selections
 let prefsStore: Awaited<ReturnType<typeof load>> | null = null;
@@ -32,7 +33,7 @@ let prefsStore: Awaited<ReturnType<typeof load>> | null = null;
 const isConnected = computed(() => sessionStore.isConnected);
 const isLoading = computed(() => sessionStore.isLoading);
 const isConnecting = computed(() => sessionStore.isConnecting);
-const error = computed(() => sessionStore.error || configStore.error);
+const error = computed(() => connectionError.value || sessionStore.error || configStore.error);
 const hasAgents = computed(() => configStore.hasAgents);
 
 // Watch for permission requests from session store
@@ -82,20 +83,26 @@ async function handleSelectFolder() {
 
 async function handleNewSession() {
   if (!selectedAgent.value) return;
-  
+
+  connectionError.value = null;
   try {
     const cwd = selectedCwd.value || '.';
     await sessionStore.createSession(selectedAgent.value, cwd);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    connectionError.value = msg;
     console.error('Failed to create session:', e);
   }
 }
 
 async function handleResumeSession(session: SavedSession) {
   selectedAgent.value = session.agentName;
+  connectionError.value = null;
   try {
     await sessionStore.resumeSession(session);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    connectionError.value = msg;
     console.error('Failed to resume session:', e);
   }
 }
@@ -133,6 +140,7 @@ function toggleSidebar() {
 }
 
 function clearError() {
+  connectionError.value = null;
   sessionStore.clearError();
   configStore.clearError();
 }
