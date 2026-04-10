@@ -61,9 +61,13 @@ impl AgentManager {
         &self,
         name: String,
         config: &AgentConfig,
+        cwd: Option<String>,
         app_handle: AppHandle,
     ) -> Result<AgentInstance, String> {
         let agent_id = Uuid::new_v4().to_string();
+
+        // Resolve working directory: explicit cwd > agent config cwd > inherited
+        let working_dir = cwd.or_else(|| config.cwd.clone());
 
         // On Windows, we need to use cmd.exe to properly resolve .cmd/.bat files like npx
         #[cfg(target_os = "windows")]
@@ -77,6 +81,9 @@ impl AgentManager {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .creation_flags(0x08000000); // CREATE_NO_WINDOW
+            if let Some(ref dir) = working_dir {
+                cmd.current_dir(dir);
+            }
             cmd.spawn()
                 .map_err(|e| format!("Failed to spawn agent: {}", e))?
         };
@@ -130,8 +137,11 @@ impl AgentManager {
                 .envs(&config.env)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
+                .stderr(Stdio::piped());
+            if let Some(ref dir) = working_dir {
+                cmd.current_dir(dir);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to spawn agent: {}", e))?
         };
 
@@ -209,12 +219,18 @@ impl AgentManager {
         name: String,
         host: &str,
         port: u16,
+        cwd: Option<String>,
         app_handle: AppHandle,
     ) -> Result<AgentInstance, String> {
         let agent_id = Uuid::new_v4().to_string();
         let url = format!("ws://{}:{}", host, port);
 
         let ws = WsConnection::connect(&url, agent_id.clone(), app_handle).await?;
+
+        // Send cwd control message before any ACP traffic
+        if let Some(ref dir) = cwd {
+            ws.send(&format!("__cwd__:{}", dir))?;
+        }
 
         let connection = AgentConnection::Remote { ws };
         self.agents.write().insert(agent_id.clone(), connection);

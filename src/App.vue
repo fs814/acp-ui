@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { load } from '@tauri-apps/plugin-store';
+import { homeDir } from '@tauri-apps/api/path';
 import { useConfigStore } from './stores/config';
 import { useSessionStore } from './stores/session';
 import { initTelemetry } from './lib/telemetry';
@@ -62,8 +63,25 @@ onMounted(async () => {
   }
 });
 
+async function resolveAgentCwd(agentName: string): Promise<string | null> {
+  const agentConfig = configStore.config.agents[agentName];
+  if (!agentConfig?.cwd) return null;
+  let cwd = agentConfig.cwd;
+  if (cwd.startsWith('~/') || cwd === '~') {
+    try {
+      const home = await homeDir();
+      cwd = cwd.replace(/^~/, home.replace(/[\\/]+$/, ''));
+    } catch {}
+  }
+  return cwd;
+}
+
 async function handleAgentSelect(agentName: string) {
   selectedAgent.value = agentName;
+  const agentCwd = await resolveAgentCwd(agentName);
+  if (agentCwd) {
+    selectedCwd.value = agentCwd;
+  }
 }
 
 async function handleSelectFolder() {
@@ -86,8 +104,16 @@ async function handleNewSession() {
 
   connectionError.value = null;
   try {
-    const cwd = selectedCwd.value || '.';
-    await sessionStore.createSession(selectedAgent.value, cwd);
+    // User's folder selection takes priority, then agent config cwd, then fallback
+    let cwd = selectedCwd.value;
+    if (!cwd) {
+      const agentCwd = await resolveAgentCwd(selectedAgent.value);
+      if (agentCwd) {
+        cwd = agentCwd;
+        selectedCwd.value = agentCwd;
+      }
+    }
+    await sessionStore.createSession(selectedAgent.value, cwd || '.');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     connectionError.value = msg;

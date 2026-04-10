@@ -25,6 +25,7 @@ pub struct AgentConfig {
     pub connection_type: ConnectionType,
     pub host: Option<String>,
     pub port: Option<u16>,
+    pub cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +48,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -60,6 +62,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -74,6 +77,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -89,6 +93,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -107,6 +112,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -121,6 +127,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -134,6 +141,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -148,6 +156,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         agents.insert(
@@ -162,6 +171,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                cwd: None,
             },
         );
         AgentsConfig { agents }

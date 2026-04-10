@@ -88,8 +88,13 @@ impl WsConnection {
     }
 
     pub fn close(self) {
-        // Dropping tx will cause the channel to close, which triggers graceful shutdown
+        // Dropping tx causes rx.recv() to return None, which sends a WS close frame.
+        // Give the task a moment to send the close frame before aborting.
         drop(self.tx);
-        self.task_handle.abort();
+        let handle = self.task_handle;
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            handle.abort();
+        });
     }
 }

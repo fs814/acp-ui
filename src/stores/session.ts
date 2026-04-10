@@ -382,8 +382,8 @@ export const useSessionStore = defineStore('session', () => {
       const configStore = useConfigStore();
       const agentConfig = configStore.config.agents[agentName];
       const agentInstance = agentConfig?.connection_type === 'remote'
-        ? await connectRemoteAgent(agentName)
-        : await spawnAgent(agentName);
+        ? await connectRemoteAgent(agentName, cwd)
+        : await spawnAgent(agentName, cwd);
 
       const stderrUnlisten = await onAgentStderr((stderr) => {
         if (stderr.agent_id === agentInstance.id) {
@@ -560,8 +560,8 @@ export const useSessionStore = defineStore('session', () => {
       const configStore = useConfigStore();
       const agentConfig = configStore.config.agents[savedSession.agentName];
       const agentInstance = agentConfig?.connection_type === 'remote'
-        ? await connectRemoteAgent(savedSession.agentName)
-        : await spawnAgent(savedSession.agentName);
+        ? await connectRemoteAgent(savedSession.agentName, savedSession.cwd)
+        : await spawnAgent(savedSession.agentName, savedSession.cwd);
 
       const client = await createAcpClient(agentInstance);
       tabClients.set(tabId, client);

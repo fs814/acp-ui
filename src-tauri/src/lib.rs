@@ -43,6 +43,7 @@ fn get_config_path(state: State<AppState>) -> Result<String, String> {
 #[tauri::command]
 fn spawn_agent(
     name: String,
+    cwd: Option<String>,
     state: State<AppState>,
     app_handle: AppHandle,
 ) -> Result<AgentInstance, String> {
@@ -59,16 +60,17 @@ fn spawn_agent(
 
     state
         .agent_manager
-        .spawn_agent(name, agent_config, app_handle)
+        .spawn_agent(name, agent_config, cwd, app_handle)
 }
 
 #[tauri::command]
 async fn connect_remote_agent(
     name: String,
+    cwd: Option<String>,
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<AgentInstance, String> {
-    let (host, port) = {
+    let (host, port, config_cwd) = {
         let config_manager = state.config_manager.read();
         let config = config_manager
             .as_ref()
@@ -87,12 +89,16 @@ async fn connect_remote_agent(
         let port = agent_config
             .port
             .ok_or_else(|| "Remote agent requires a port".to_string())?;
-        (host, port)
+        let config_cwd = agent_config.cwd.clone();
+        (host, port, config_cwd)
     };
+
+    // Explicit cwd > agent config cwd
+    let resolved_cwd = cwd.or(config_cwd);
 
     state
         .agent_manager
-        .connect_remote_agent(name, &host, port, app_handle)
+        .connect_remote_agent(name, &host, port, resolved_cwd, app_handle)
         .await
 }
 
@@ -120,6 +126,7 @@ fn add_agent(
     connection_type: Option<String>,
     host: Option<String>,
     port: Option<u16>,
+    cwd: Option<String>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
     let ct = match connection_type.as_deref() {
@@ -139,6 +146,7 @@ fn add_agent(
                 connection_type: ct,
                 host,
                 port,
+                cwd,
             },
         )
 }
@@ -161,6 +169,7 @@ fn update_agent(
     connection_type: Option<String>,
     host: Option<String>,
     port: Option<u16>,
+    cwd: Option<String>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
     let ct = match connection_type.as_deref() {
@@ -180,6 +189,7 @@ fn update_agent(
                 connection_type: ct,
                 host,
                 port,
+                cwd,
             },
         )
 }

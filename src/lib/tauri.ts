@@ -15,12 +15,12 @@ export async function getConfigPath(): Promise<string> {
   return invoke<string>('get_config_path');
 }
 
-export async function spawnAgent(name: string): Promise<AgentInstance> {
-  return invoke<AgentInstance>('spawn_agent', { name });
+export async function spawnAgent(name: string, cwd?: string): Promise<AgentInstance> {
+  return invoke<AgentInstance>('spawn_agent', { name, cwd: cwd || null });
 }
 
-export async function connectRemoteAgent(name: string): Promise<AgentInstance> {
-  return invoke<AgentInstance>('connect_remote_agent', { name });
+export async function connectRemoteAgent(name: string, cwd?: string): Promise<AgentInstance> {
+  return invoke<AgentInstance>('connect_remote_agent', { name, cwd: cwd || null });
 }
 
 export async function sendToAgent(agentId: string, message: string): Promise<void> {
