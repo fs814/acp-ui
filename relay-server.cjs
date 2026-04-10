@@ -71,9 +71,10 @@ wss.on('connection', (ws) => {
   const pendingMessages = [];
 
   function spawnAgent(cwd) {
+    const isWindows = process.platform === 'win32';
     const spawnOpts = {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
+      shell: isWindows ? 'cmd.exe' : true,
     };
     if (cwd) {
       spawnOpts.cwd = cwd;
