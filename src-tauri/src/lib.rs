@@ -70,7 +70,7 @@ async fn connect_remote_agent(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<AgentInstance, String> {
-    let (host, port, config_cwd) = {
+    let (ws_url, config_cwd) = {
         let config_manager = state.config_manager.read();
         let config = config_manager
             .as_ref()
@@ -82,15 +82,22 @@ async fn connect_remote_agent(
             .get(&name)
             .ok_or_else(|| format!("Agent '{}' not found in config", name))?;
 
-        let host = agent_config
-            .host
-            .clone()
-            .ok_or_else(|| "Remote agent requires a host".to_string())?;
-        let port = agent_config
-            .port
-            .ok_or_else(|| "Remote agent requires a port".to_string())?;
+        // Build WebSocket URL: explicit url field takes priority, otherwise construct from host+port
+        let ws_url = if let Some(ref url) = agent_config.url {
+            url.clone()
+        } else {
+            let host = agent_config
+                .host
+                .clone()
+                .ok_or_else(|| "Remote agent requires a host or url".to_string())?;
+            let port = agent_config
+                .port
+                .ok_or_else(|| "Remote agent requires a port or url".to_string())?;
+            format!("ws://{}:{}", host, port)
+        };
+
         let config_cwd = agent_config.cwd.clone();
-        (host, port, config_cwd)
+        (ws_url, config_cwd)
     };
 
     // Explicit cwd > agent config cwd
@@ -98,7 +105,7 @@ async fn connect_remote_agent(
 
     state
         .agent_manager
-        .connect_remote_agent(name, &host, port, resolved_cwd, app_handle)
+        .connect_remote_agent(name, &ws_url, resolved_cwd, app_handle)
         .await
 }
 
@@ -126,6 +133,7 @@ fn add_agent(
     connection_type: Option<String>,
     host: Option<String>,
     port: Option<u16>,
+    url: Option<String>,
     cwd: Option<String>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
@@ -146,6 +154,7 @@ fn add_agent(
                 connection_type: ct,
                 host,
                 port,
+                url,
                 cwd,
             },
         )
@@ -169,6 +178,7 @@ fn update_agent(
     connection_type: Option<String>,
     host: Option<String>,
     port: Option<u16>,
+    url: Option<String>,
     cwd: Option<String>,
     state: State<AppState>,
 ) -> Result<AgentsConfig, String> {
@@ -189,6 +199,7 @@ fn update_agent(
                 connection_type: ct,
                 host,
                 port,
+                url,
                 cwd,
             },
         )

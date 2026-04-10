@@ -7,6 +7,7 @@ export interface AgentConfig {
   connection_type?: 'local' | 'remote';
   host?: string;
   port?: number;
+  url?: string;
   cwd?: string;
 }
 

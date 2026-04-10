@@ -217,15 +217,13 @@ impl AgentManager {
     pub async fn connect_remote_agent(
         &self,
         name: String,
-        host: &str,
-        port: u16,
+        url: &str,
         cwd: Option<String>,
         app_handle: AppHandle,
     ) -> Result<AgentInstance, String> {
         let agent_id = Uuid::new_v4().to_string();
-        let url = format!("ws://{}:{}", host, port);
 
-        let ws = WsConnection::connect(&url, agent_id.clone(), app_handle).await?;
+        let ws = WsConnection::connect(url, agent_id.clone(), app_handle).await?;
 
         // Send cwd control message before any ACP traffic
         if let Some(ref dir) = cwd {

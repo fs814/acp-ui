@@ -19,6 +19,7 @@ const agents = computed(() => {
     connection_type: config.connection_type || 'local',
     host: config.host || '',
     port: config.port || undefined,
+    url: config.url || '',
   }));
 });
 
@@ -32,6 +33,7 @@ const formArgs = ref('');
 const formEnv = ref<Record<string, string>>({});
 const formHost = ref('');
 const formPort = ref<number | undefined>(undefined);
+const formUrl = ref('');
 const formError = ref('');
 const isSubmitting = ref(false);
 
@@ -43,6 +45,7 @@ function resetForm() {
   formEnv.value = {};
   formHost.value = '';
   formPort.value = undefined;
+  formUrl.value = '';
   formError.value = '';
   showAddForm.value = false;
   editingAgent.value = null;
@@ -53,7 +56,7 @@ function startAdd() {
   showAddForm.value = true;
 }
 
-function startEdit(agent: { name: string; command: string; args: string; env: Record<string, string>; connection_type: string; host: string; port?: number }) {
+function startEdit(agent: { name: string; command: string; args: string; env: Record<string, string>; connection_type: string; host: string; port?: number; url: string }) {
   resetForm();
   editingAgent.value = agent.name;
   formName.value = agent.name;
@@ -63,6 +66,7 @@ function startEdit(agent: { name: string; command: string; args: string; env: Re
   formEnv.value = { ...agent.env };
   formHost.value = agent.host;
   formPort.value = agent.port;
+  formUrl.value = agent.url;
 }
 
 function parseArgs(argsString: string): string[] {
@@ -109,12 +113,14 @@ async function handleSubmit() {
   }
 
   if (formConnectionType.value === 'remote') {
-    if (!formHost.value.trim()) {
-      formError.value = 'Host is required for remote agents';
+    const hasUrl = formUrl.value.trim().length > 0;
+    const hasHost = formHost.value.trim().length > 0;
+    if (!hasUrl && !hasHost) {
+      formError.value = 'Either URL or Host is required for remote agents';
       return;
     }
-    if (!formPort.value || formPort.value < 1 || formPort.value > 65535) {
-      formError.value = 'A valid port (1-65535) is required for remote agents';
+    if (!hasUrl && (!formPort.value || formPort.value < 1 || formPort.value > 65535)) {
+      formError.value = 'A valid port (1-65535) is required when using Host';
       return;
     }
   } else {
@@ -129,13 +135,14 @@ async function handleSubmit() {
 
   try {
     const connectionType = formConnectionType.value;
-    const host = connectionType === 'remote' ? formHost.value : undefined;
+    const host = connectionType === 'remote' ? formHost.value || undefined : undefined;
     const port = connectionType === 'remote' ? formPort.value : undefined;
+    const url = connectionType === 'remote' ? formUrl.value || undefined : undefined;
 
     if (editingAgent.value) {
       const newConfig = await updateAgent(
         formName.value, formCommand.value, args, formEnv.value,
-        connectionType, host, port,
+        connectionType, host, port, url,
       );
       configStore.updateFromEvent(newConfig);
     } else {
@@ -147,7 +154,7 @@ async function handleSubmit() {
       }
       const newConfig = await addAgent(
         formName.value, formCommand.value, args, formEnv.value,
-        connectionType, host, port,
+        connectionType, host, port, url,
       );
       configStore.updateFromEvent(newConfig);
     }
@@ -249,11 +256,26 @@ async function handleDelete(name: string) {
             <!-- Remote agent fields -->
             <template v-else>
               <div class="form-group">
+                <label>URL <small>(for wss:// endpoints)</small></label>
+                <input
+                  v-model="formUrl"
+                  type="text"
+                  placeholder="wss://example.com/path"
+                />
+                <small>Direct WebSocket URL. If set, Host/Port are ignored.</small>
+              </div>
+
+              <div class="form-divider">
+                <span>or</span>
+              </div>
+
+              <div class="form-group">
                 <label>Host</label>
                 <input
                   v-model="formHost"
                   type="text"
                   placeholder="192.168.1.100"
+                  :disabled="!!formUrl"
                 />
               </div>
 
@@ -265,6 +287,7 @@ async function handleDelete(name: string) {
                   placeholder="9800"
                   min="1"
                   max="65535"
+                  :disabled="!!formUrl"
                 />
               </div>
             </template>
@@ -300,7 +323,8 @@ async function handleDelete(name: string) {
                   {{ agent.name }}
                 </div>
                 <div class="agent-command">
-                  <code v-if="agent.connection_type === 'remote'">{{ agent.host }}:{{ agent.port }}</code>
+                  <code v-if="agent.connection_type === 'remote' && agent.url">{{ agent.url }}</code>
+                  <code v-else-if="agent.connection_type === 'remote'">{{ agent.host }}:{{ agent.port }}</code>
                   <code v-else>{{ agent.command }} {{ agent.args }}</code>
                 </div>
               </div>
@@ -457,6 +481,23 @@ async function handleDelete(name: string) {
   margin-top: 0.25rem;
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
 }
 
 .connection-toggle {

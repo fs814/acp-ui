@@ -25,6 +25,7 @@ pub struct AgentConfig {
     pub connection_type: ConnectionType,
     pub host: Option<String>,
     pub port: Option<u16>,
+    pub url: Option<String>,
     pub cwd: Option<String>,
 }
 
@@ -48,6 +49,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -62,6 +64,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -77,6 +80,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -93,6 +97,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -112,6 +117,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -127,6 +133,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -141,6 +148,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -156,6 +164,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );
@@ -171,6 +180,7 @@ impl Default for AgentsConfig {
                 connection_type: ConnectionType::default(),
                 host: None,
                 port: None,
+                url: None,
                 cwd: None,
             },
         );

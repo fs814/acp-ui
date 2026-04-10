@@ -43,8 +43,9 @@ export async function addAgent(
   connectionType?: string,
   host?: string,
   port?: number,
+  url?: string,
 ): Promise<AgentsConfig> {
-  return invoke<AgentsConfig>('add_agent', { name, command, args, env, connectionType, host, port });
+  return invoke<AgentsConfig>('add_agent', { name, command, args, env, connectionType, host, port, url });
 }
 
 export async function removeAgent(name: string): Promise<AgentsConfig> {
@@ -59,8 +60,9 @@ export async function updateAgent(
   connectionType?: string,
   host?: string,
   port?: number,
+  url?: string,
 ): Promise<AgentsConfig> {
-  return invoke<AgentsConfig>('update_agent', { name, command, args, env, connectionType, host, port });
+  return invoke<AgentsConfig>('update_agent', { name, command, args, env, connectionType, host, port, url });
 }
 
 // Event listeners
